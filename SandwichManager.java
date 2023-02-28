@@ -52,7 +52,7 @@ public class SandwichManager {
     BreadPool breadPool = new BreadPool(bread_capacity); // buffer
     Runnable breadMaker = new Runnable() {
       @Override
-      public void run(){
+      public synchronized void run(){
         for (int i=0; i < bread_capacity ; i++){
           gowork(bread_rate);
           Bread bread= new Bread(i); 
@@ -68,7 +68,7 @@ public class SandwichManager {
     EggPool eggPool = new EggPool(egg_capacity); // buffer
     Runnable eggMaker = new Runnable() {
       @Override
-      public void run(){
+      public synchronized void run(){
         for (int i=0; i< egg_capacity; i++){
           gowork(egg_rate);
           Egg egg= new Egg(i);
@@ -83,19 +83,24 @@ public class SandwichManager {
      SandwichPool sandwichPool = new SandwichPool(n_sandwiches); // buffer
      Runnable sandwichPacker = new Runnable() {
       @Override
-      public void run(){
+      public synchronized void run(){
         // System.out.println("ENTERED");
 
-        gowork(packing_rate);
 
-        Bread bread1 = breadPool.get();
-        Bread bread2 = breadPool.get();
-        Egg egg= eggPool.get();
+        for (int i=0; i< n_sandwiches; i++){
+          gowork(packing_rate);
 
-        Sandwich sandwich = new Sandwich(0,egg, bread1, bread2);
-        System.out.println("ENTERED");
-        System.out.println( Thread.currentThread().getName() + " packs " + sandwich + " with " + bread1 + " from " +  bread1.getThreadName() + " and " + egg + " from " + egg.getThreadName() + " and " + bread2 + " from " + bread2.getThreadName() );
-        sandwichPool.put(sandwich);
+          Bread bread1 = breadPool.get();
+          Bread bread2 = breadPool.get();
+          Egg egg= eggPool.get();
+
+          Sandwich sandwich = new Sandwich(0,egg, bread1, bread2);
+          System.out.println("ENTERED");
+          System.out.println(Thread.currentThread().getName() + " packs " + sandwich + " with " + bread1 + " from " +  bread1.getThreadName() + " and " + egg + " from " + egg.getThreadName() + " and " + bread2 + " from " + bread2.getThreadName() );
+
+          sandwichPool.put(sandwich);
+
+        }
     
       }
     };
@@ -105,6 +110,7 @@ public class SandwichManager {
     ******************************************************************************/
     Thread[] threads = new Thread[100];
 
+    // CREATING ALL MACHINES - THREADS
     for (int i = 0; i < n_bread_makers; i++) {
       threads[i] = new Thread(breadMaker);
       String name = "B" + i;
@@ -116,11 +122,6 @@ public class SandwichManager {
       String name = "E" + num;
       threads[i].setName(name);
     }
-    for (int i = 0; i <  (n_bread_makers+n_egg_makers); i++) {
-      threads[i].start();
-      // System.out.println("thread " + i);
-    }
-
     for (int i = (n_bread_makers+n_egg_makers); i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++){
       threads[i] = new Thread(sandwichPacker);
       int num = i - (n_bread_makers+n_egg_makers);
@@ -128,7 +129,14 @@ public class SandwichManager {
       threads[i].setName(name);
     }
 
-    for (int i = (n_bread_makers+n_egg_makers); i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++){
+
+
+    // for (int i = 0; i <  (n_bread_makers+n_egg_makers); i++) {
+    //   threads[i].start();
+    //   // System.out.println("thread " + i);
+    // }
+
+    for (int i = 0; i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++){
       threads[i].start();
       // System.out.println("sandwich packer " + i);
     }
@@ -188,7 +196,6 @@ class Egg {
 
 }
 
-
 class Sandwich {
 
   int id;
@@ -211,8 +218,6 @@ class Sandwich {
 
 }
 
-
-
 class SandwichPool {
 
   static volatile Sandwich[] buffer;
@@ -224,9 +229,9 @@ class SandwichPool {
   }
 
   public synchronized void put(Sandwich sandwich){
-    // while (item_count == buffer.length){ // reject food if there are no empty slots
-    //    try { this.wait(); } catch (InterruptedException e) {}
-    // }
+    while (item_count == buffer.length){ // reject food if there are no empty slots
+       try { this.wait(); } catch (InterruptedException e) {}
+    }
 
     if (item_count == buffer.length) {
       System.out.println("done packing all sandwitches!");
@@ -258,7 +263,6 @@ class SandwichPool {
   }
 
 }
-
 
 class BreadPool {
 
@@ -299,7 +303,6 @@ class BreadPool {
   }
 
 }
-
 
 class EggPool {
 
