@@ -8,6 +8,8 @@ import java.util.*;
 
 public class SandwichManager {
 
+
+
   static void gowork(int n){ 
     for (int i=0; i<n; i++){
         long m = 300000000;
@@ -53,11 +55,10 @@ public class SandwichManager {
       @Override
       public void run(){
         for (int i=0; i < bread_capacity ; i++){
-            gowork(bread_rate);
-            Bread bread= new Bread(i); 
-            long y = Thread.currentThread().getId();
-            int x = (int)y;
-            breadPool.put(x, bread);
+          gowork(bread_rate);
+          Bread bread= new Bread(i); 
+          bread.setThreadName(Thread.currentThread().getName());
+          breadPool.put(bread);
         }
       }
     };
@@ -70,11 +71,10 @@ public class SandwichManager {
       @Override
       public void run(){
         for (int i=0; i< egg_capacity; i++){
-            gowork(egg_rate);
-            Egg egg= new Egg(i);
-            long y = Thread.currentThread().getId();
-            int x = (int)y;
-            eggPool.put(x,egg);
+          gowork(egg_rate);
+          Egg egg= new Egg(i);
+          egg.setThreadName(Thread.currentThread().getName());
+          eggPool.put(egg);
         }
       }
     }; 
@@ -85,38 +85,21 @@ public class SandwichManager {
       @Override
       public void run(){
         // System.out.println("ENTERED");
+        gowork(packing_rate);
+
         Bread bread1 = breadPool.get();
         Bread bread2 = breadPool.get();
         Egg egg= eggPool.get();
-        Sandwich sandwich = new Sandwich(0, egg, bread1, bread2);
-        long y = Thread.currentThread().getId();
-        int sandwichId = (int)y;
+        
+        Sandwich sandwich = new Sandwich(0,egg, bread1, bread2);
 
-        System.out.println("S" + sandwichId + " packs " + sandwich + " with " + bread1 + " from SOMEWHERE1 " + " and " + egg + " from " + "SOMEWHERE2" + " and " + bread2 + " from SOMEWHERE2" );
-        gowork(packing_rate);
+        System.out.println( Thread.currentThread().getName() + " packs " + sandwich + " with " + bread1 + " from " +  bread1.getThreadName() + " and " + egg + " from " + egg.getThreadName() + " and " + bread2 + " from " + bread2.getThreadName() );
+
+
+        
       }
     };
 
-
-    // Runnable breadConsumer = new Runnable() {
-    //   @Override
-    //   public void run(){
-    //       for (int i=0; i< bread_capacity; i++){
-    //           Bread breads = breadPool.get();
-    //           gowork(bread_rate);
-    //       }
-    //   }
-    // };
-
-    // Runnable eggConsumer = new Runnable() {
-    //   @Override
-    //   public void run(){
-    //       for (int i=0; i< egg_capacity; i++){
-    //           Egg eggs = eggPool.get();
-    //           gowork(5);
-    //       }
-    //   }
-    // };
     /******************************************************************************
      * MANAGER
      ******************************************************************************/
@@ -124,19 +107,28 @@ public class SandwichManager {
 
     for (int i = 0; i < n_bread_makers; i++) {
       threads[i] = new Thread(breadMaker);
+      String name = "B" + i;
+      threads[i].setName(name);
     }
     for (int i = n_bread_makers; i < (n_bread_makers+n_egg_makers) ; i++) {
       threads[i] = new Thread(eggMaker);
+      int num = i - n_bread_makers;
+      String name = "E" + num;
+      threads[i].setName(name);
     }
     for (int i = 0; i <  (n_bread_makers+n_egg_makers); i++) {
       threads[i].start();
       // System.out.println("thread " + i);
     }
 
-    for (int i = (n_bread_makers+n_egg_makers); i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++) {
+    for (int i = (n_bread_makers+n_egg_makers); i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++){
       threads[i] = new Thread(sandwichPacker);
+      int num = i - (n_bread_makers+n_egg_makers);
+      String name = "S" + num;
+      threads[i].setName(name);
     }
-    for (int i = (n_bread_makers+n_egg_makers); i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++) {
+
+    for (int i = (n_bread_makers+n_egg_makers); i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++){
       threads[i].start();
       // System.out.println("sandwich packer " + i);
     }
@@ -147,56 +139,12 @@ public class SandwichManager {
 
 }
 
-class Machine extends Thread {
-
-  private long id;
-  private Runnable runnable;
-  private int count;
-
-  public Machine(long id, Runnable runnable, int count) {
-    this.id = id;
-    this.runnable = runnable;
-    this.count = count;
-  }
-
-  @Override
-  public void run() {
-    for (int i = 0; i < count; i++) {
-        System.out.println("Thread " + id + " is running");
-        runnable.run();
-    }
-  }
-
-  public long getId() {
-    return id;
-  }
-
-  public void setId(long id) {
-    this.id = id;
-  }
-
-  public Runnable getRunnable() {
-    return runnable;
-  }
-
-  public void setRunnable(Runnable runnable) {
-    this.runnable = runnable;
-  }
-
-  public int getCount() {
-    return count;
-  }
-
-  public void setCount(int count) {
-    this.count = count;
-  }
-
-}
-
 
 class Bread {
 
   int id;
+  String threadName;
+
   public Bread(int id){
     this.id = id;
   }
@@ -206,11 +154,21 @@ class Bread {
     return "bread " + id; 
   }
 
+  public void setThreadName(String name) {
+    this.threadName = name;
+  }
+
+  public String getThreadName() {
+    return this.threadName;
+  }
+
 }
 
 class Egg {
 
   int id;
+  String threadName;
+
   public Egg(int id){
     this.id = id;
   }
@@ -218,6 +176,14 @@ class Egg {
   @Override
   public String toString(){
     return "egg " + id; 
+  }
+
+  public void setThreadName(String name) {
+    this.threadName = name;
+  }
+
+  public String getThreadName() {
+    return this.threadName;
   }
 
 }
@@ -229,6 +195,7 @@ class Sandwich {
   Egg egg;
   Bread bread1;
   Bread bread2;
+  String threadName;
 
   public Sandwich(int id, Egg egg, Bread bread1, Bread bread2){
     this.id = id;
@@ -236,9 +203,10 @@ class Sandwich {
     this.bread1 = bread1;
     this.bread2 = bread2;
   }
+
   @Override
   public String toString(){
-    return "sandwich " + id + " with " + bread1 + " and " + egg + " and " + bread2; 
+    return "sandwich " + id;
   }
 
 }
@@ -254,14 +222,14 @@ class BreadPool {
     buffer = new Bread[size];
   }
 
-  public synchronized void put(int threadId, Bread bread){
+  public synchronized void put(Bread bread){
     while (item_count == buffer.length){
        try { this.wait(); } catch (InterruptedException e) {}
     }
     buffer[back] = bread;
     back = (back + 1) % buffer.length;
 
-    System.out.println("B" + threadId + " puts " + bread);
+    System.out.println(Thread.currentThread().getName() + " puts " + bread);
     item_count++;
     
     this.notifyAll();
@@ -294,13 +262,13 @@ class EggPool {
       buffer = new Egg[size];
     }
 
-    public synchronized void put(int threadId, Egg egg){
+    public synchronized void put(Egg egg){
       while (item_count == buffer.length){
           try { this.wait(); } catch (InterruptedException e) {}
       }
       buffer[back] = egg;
       back = (back + 1) % buffer.length;
-      System.out.println("E" + threadId + " puts " + egg);
+      System.out.println(Thread.currentThread().getName() + " puts " + egg);
       item_count++;
       this.notifyAll();
     }
