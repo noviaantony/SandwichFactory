@@ -194,6 +194,20 @@ class Machine extends Thread {
 }
 
 
+class Bread {
+
+  int id;
+  public Bread(int id){
+    this.id = id;
+  }
+
+  @Override
+  public String toString(){
+    return "bread " + id; 
+  }
+
+}
+
 class Egg {
 
   int id;
