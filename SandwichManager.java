@@ -1,9 +1,15 @@
-// javac SandwichManager 10 4 4 3 3 3 3 5 4
 // java SandwichManager 10 4 4 3 3 3 3 5 4
+// java SandwichManager 14 2 3 2 2 4 2 3 3
 
 import java.io.*;
+import java.util.*;
 
 public class SandwichManager {
+
+  static HashMap<String, Integer> breadSummary = new HashMap<String, Integer>();
+  static HashMap<String, Integer> eggSummary = new HashMap<String, Integer>();
+  static HashMap<String, Integer> sandwichSummary = new HashMap<String, Integer>();
+
 
   static volatile int totalBread, totalEgg, totalSandwiches = 0;
 
@@ -58,17 +64,16 @@ public class SandwichManager {
           gowork(bread_rate);
           Bread bread= new Bread(i); 
           bread.setThreadName(Thread.currentThread().getName());
-
           synchronized(breadLock) { // ensure mutual exc - other bread makers cant access. 
             if (totalBread >= n_sandwiches * 2) {
               break;
             }
             breadPool.put(bread);
+            breadSummary.put(Thread.currentThread().getName(), breadSummary.getOrDefault(Thread.currentThread().getName(), 0) + 1);
             totalBread++;
           }
-  
         }
-        System.out.println("bread machine DONE");
+        // System.out.println("bread machine DONE");
       }
     };
 
@@ -83,17 +88,16 @@ public class SandwichManager {
           gowork(egg_rate);
           Egg egg= new Egg(i);
           egg.setThreadName(Thread.currentThread().getName());
-
           synchronized(eggLock) { // ensure mutual exc - other egg makers cant access. 
             if (totalEgg >= n_sandwiches) {
               break;
             }
-            eggPool.put(egg);
+            eggPool.put(egg);   
+            eggSummary.put(Thread.currentThread().getName(), eggSummary.getOrDefault(Thread.currentThread().getName(), 0) + 1); 
             totalEgg++;
-          }
-         
+          } 
         }
-        System.out.println("egg machine DONE");
+        // System.out.println("egg machine DONE");
       }
     }; 
     /******************************************************************************
@@ -105,23 +109,18 @@ public class SandwichManager {
       public void run(){
         for (int i=0; i< n_sandwiches; i++){
           gowork(packing_rate);
-
           synchronized(sandwichLock) { // ensure mutual exc - other egg makers cant access. 
             if (totalSandwiches >= n_sandwiches) {
               break;
             }
-
             Bread bread1 = breadPool.get();
             Egg egg= eggPool.get();
             Bread bread2 = breadPool.get();
-
             Sandwich sandwich = new Sandwich(i,egg, bread1, bread2);
-            System.out.println("ENTERED");
-    
+            // System.out.println("ENTERED");
             sandwichPool.put(sandwich);
-
+            sandwichSummary.put(Thread.currentThread().getName(), sandwichSummary.getOrDefault(Thread.currentThread().getName(), 0) + 1);
             totalSandwiches++;
-
             System.out.println(Thread.currentThread().getName() + " packs " + sandwich + " with " + bread1 + " from " +  bread1.getThreadName() + " and " + egg + " from " + egg.getThreadName() + " and " + bread2 + " from " + bread2.getThreadName() );
             
           }
@@ -130,7 +129,6 @@ public class SandwichManager {
     
       }
     };
-
     /******************************************************************************
      * MANAGER
     ******************************************************************************/
@@ -165,7 +163,24 @@ public class SandwichManager {
       }catch(InterruptedException e){
           e.printStackTrace();
       }
-    } 
+    }
+
+    System.out.println();
+    System.out.println("summary:");
+
+    for (Map.Entry<String, Integer> set :breadSummary.entrySet()) {
+      System.out.println(set.getKey() + " makes "+ set.getValue());
+    }
+
+    for (Map.Entry<String, Integer> set :eggSummary.entrySet()) {
+      System.out.println(set.getKey() + " makes "+ set.getValue());
+    }
+
+    for (Map.Entry<String, Integer> set :sandwichSummary.entrySet()) {
+      System.out.println(set.getKey() + " makes "+ set.getValue());
+    }
+
+    
 
   }
 
@@ -173,10 +188,12 @@ public class SandwichManager {
 }
 
 
+
 class Bread {
 
   int id;
   String threadName;
+
 
   public Bread(int id){
     this.id = id;
@@ -248,7 +265,6 @@ class SandwichPool {
   static volatile Sandwich[] buffer;
   static volatile int front = 0, back = 0, item_count = 0;
 
-
   SandwichPool(int size){ 
     buffer = new Sandwich[size];
   }
@@ -259,14 +275,14 @@ class SandwichPool {
     // }
 
     if (item_count == buffer.length) {
-      System.out.println("done packing all sandwitches!");
+      // System.out.println("done packing all sandwitches!");
       return;
     }
 
     buffer[back] = sandwich;
     back = (back + 1) % buffer.length;
 
-    System.out.println("[" + Thread.currentThread().getName() + " puts " + sandwich + " in the sandwitch pool]");
+    // System.out.println("[" + Thread.currentThread().getName() + " puts " + sandwich + " in the sandwitch pool]");
     item_count++;
     
     this.notifyAll();
