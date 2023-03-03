@@ -1,14 +1,15 @@
-import java.util.concurrent.*;
-import java.util.concurrent.locks.*;
-import java.util.logging.*;
-import java.util.*;
-
 // javac SandwichManager 10 4 4 3 3 3 3 5 4
 // java SandwichManager 10 4 4 3 3 3 3 5 4
 
+import java.io.*;
+
 public class SandwichManager {
 
-  static Object lock = new Object();
+  static volatile int totalBread, totalEgg, totalSandwiches = 0;
+
+  static Object breadLock = new Object();
+  static Object eggLock = new Object();
+  static Object sandwichLock = new Object();
 
   static void gowork(int n){ 
     for (int i=0; i<n; i++){
@@ -17,13 +18,14 @@ public class SandwichManager {
             m--;
         }
     }
-   }
+  }
 
   public static void main(String[] args) {
 
     /******************************************************************************
      * ARGUMENTS
-     ******************************************************************************/
+    ******************************************************************************/
+
     int n_sandwiches = Integer.parseInt(args[0]); // total sandwiches to make
     System.out.println("sandwiches: " + n_sandwiches);
     int bread_capacity = Integer.parseInt(args[1]); // number of slots in bread pool
@@ -44,37 +46,54 @@ public class SandwichManager {
     System.out.println("packing rate: " + packing_rate);
     System.out.println();
 
-  
 
     /******************************************************************************
      * BREAD MACHINE
-     ******************************************************************************/
+    ******************************************************************************/
     BreadPool breadPool = new BreadPool(bread_capacity); // buffer
     Runnable breadMaker = new Runnable() {
       @Override
-      public synchronized void run(){
-        for (int i=0; i < bread_capacity ; i++){
+      public void run(){
+        for (int i=0; i < 2000; i++){
           gowork(bread_rate);
           Bread bread= new Bread(i); 
           bread.setThreadName(Thread.currentThread().getName());
-          breadPool.put(bread);
+
+          synchronized(breadLock) { // ensure mutual exc - other bread makers cant access. 
+            if (totalBread >= n_sandwiches * 2) {
+              break;
+            }
+            breadPool.put(bread);
+            totalBread++;
+          }
+  
         }
+        System.out.println("bread machine DONE");
       }
     };
 
     /******************************************************************************
      * EGG MACHINE
-     ******************************************************************************/
+    ******************************************************************************/
     EggPool eggPool = new EggPool(egg_capacity); // buffer
     Runnable eggMaker = new Runnable() {
       @Override
-      public synchronized void run(){
-        for (int i=0; i< egg_capacity; i++){
+      public void run(){
+        for (int i=0; i< 1000; i++){
           gowork(egg_rate);
           Egg egg= new Egg(i);
           egg.setThreadName(Thread.currentThread().getName());
-          eggPool.put(egg);
+
+          synchronized(eggLock) { // ensure mutual exc - other egg makers cant access. 
+            if (totalEgg >= n_sandwiches) {
+              break;
+            }
+            eggPool.put(egg);
+            totalEgg++;
+          }
+         
         }
+        System.out.println("egg machine DONE");
       }
     }; 
     /******************************************************************************
@@ -83,22 +102,29 @@ public class SandwichManager {
      SandwichPool sandwichPool = new SandwichPool(n_sandwiches); // buffer
      Runnable sandwichPacker = new Runnable() {
       @Override
-      public synchronized void run(){
-        // System.out.println("ENTERED");
-
-
+      public void run(){
         for (int i=0; i< n_sandwiches; i++){
           gowork(packing_rate);
 
-          Bread bread1 = breadPool.get();
-          Bread bread2 = breadPool.get();
-          Egg egg= eggPool.get();
+          synchronized(sandwichLock) { // ensure mutual exc - other egg makers cant access. 
+            if (totalSandwiches >= n_sandwiches) {
+              break;
+            }
 
-          Sandwich sandwich = new Sandwich(0,egg, bread1, bread2);
-          System.out.println("ENTERED");
-          System.out.println(Thread.currentThread().getName() + " packs " + sandwich + " with " + bread1 + " from " +  bread1.getThreadName() + " and " + egg + " from " + egg.getThreadName() + " and " + bread2 + " from " + bread2.getThreadName() );
+            Bread bread1 = breadPool.get();
+            Egg egg= eggPool.get();
+            Bread bread2 = breadPool.get();
 
-          sandwichPool.put(sandwich);
+            Sandwich sandwich = new Sandwich(i,egg, bread1, bread2);
+            System.out.println("ENTERED");
+    
+            sandwichPool.put(sandwich);
+
+            totalSandwiches++;
+
+            System.out.println(Thread.currentThread().getName() + " packs " + sandwich + " with " + bread1 + " from " +  bread1.getThreadName() + " and " + egg + " from " + egg.getThreadName() + " and " + bread2 + " from " + bread2.getThreadName() );
+            
+          }
 
         }
     
@@ -129,18 +155,17 @@ public class SandwichManager {
       threads[i].setName(name);
     }
 
-
-
-    // for (int i = 0; i <  (n_bread_makers+n_egg_makers); i++) {
-    //   threads[i].start();
-    //   // System.out.println("thread " + i);
-    // }
-
     for (int i = 0; i < (n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++){
       threads[i].start();
-      // System.out.println("sandwich packer " + i);
     }
 
+    for (int i=0; i<(n_bread_makers+n_egg_makers)+ n_sandwich_packers; i++){
+      try{
+          threads[i].join();
+      }catch(InterruptedException e){
+          e.printStackTrace();
+      }
+    } 
 
   }
 
@@ -229,9 +254,9 @@ class SandwichPool {
   }
 
   public synchronized void put(Sandwich sandwich){
-    while (item_count == buffer.length){ // reject food if there are no empty slots
-       try { this.wait(); } catch (InterruptedException e) {}
-    }
+    // while (item_count == buffer.length){ // reject food if there are no empty slots
+    //    try { this.wait(); } catch (InterruptedException e) {}
+    // }
 
     if (item_count == buffer.length) {
       System.out.println("done packing all sandwitches!");
@@ -250,7 +275,10 @@ class SandwichPool {
 
   public synchronized Sandwich get(){
     while (item_count == 0){ // wont deliver to packing machine if dh bread!
-      try { this.wait(); } catch (InterruptedException e) {}
+      try { 
+        this.wait(); 
+        System.out.println("no sandwiches!");
+      } catch (InterruptedException e) {}
     }
 
     Sandwich sandwich = buffer[front];
@@ -276,7 +304,11 @@ class BreadPool {
 
   public synchronized void put(Bread bread){
     while (item_count == buffer.length){ // reject food if there are no empty slots
-       try { this.wait(); } catch (InterruptedException e) {}
+       try { 
+        this.wait(); // allow other thread to continue
+      } catch (InterruptedException e) {
+
+      }
     }
     buffer[back] = bread;
     back = (back + 1) % buffer.length;
@@ -285,6 +317,7 @@ class BreadPool {
     item_count++;
     
     this.notifyAll();
+
   
   }
 
@@ -298,6 +331,7 @@ class BreadPool {
     // System.out.println("B" + item_count + " eats " + bread);
     item_count--;
     this.notifyAll();
+    
 
     return bread;
   }
@@ -315,8 +349,11 @@ class EggPool {
 
     public synchronized void put(Egg egg){
       while (item_count == buffer.length){
-          try { this.wait(); } catch (InterruptedException e) {}
+          try { 
+            this.wait();  // if full, we will be done if consumer consumed
+          } catch (InterruptedException e) {}
       }
+
       buffer[back] = egg;
       back = (back + 1) % buffer.length;
       System.out.println(Thread.currentThread().getName() + " puts " + egg);
